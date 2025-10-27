@@ -10,12 +10,12 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// Case'de istenen Tenant (Kiracı) modeli
+// Tenant model
 model Tenant {
   id        String   @id @default(cuid())
   name      String   @unique
-  apiKey    String   @unique // Tenant'ın kimliğini belirlemek için
-  apiSecret String   // JWT almak için kullanılacak hash'lenmiş secret
+  apiKey    String   @unique
+  apiSecret String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -23,10 +23,10 @@ model Tenant {
   auditLogs    AuditLog[]
 }
 
-// Case'de istenen Feature (Özellik) modeli
+// Feature model
 model Feature {
   id          String   @id @default(cuid())
-  name        String   @unique // Örn: "new-dashboard", "beta-checkout"
+  name        String   @unique
   description String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -34,53 +34,46 @@ model Feature {
   featureFlags FeatureFlag[]
 }
 
-// Değerlendirme stratejisi tipleri
 enum EvaluationStrategy {
-  BOOLEAN    // Basit true/false
-  PERCENTAGE // Yüzdelik dağılım
-  USER       // Belirli kullanıcı listesi (Bu case'de basitleştireceğiz)
+  BOOLEAN 
+  PERCENTAGE
+  USER
 }
 
-// Ortam tipleri
 enum Environment {
   dev
   staging
   prod
 }
 
-// Case'de istenen ana model: Feature Flags
 model FeatureFlag {
   id        String   @id @default(cuid())
   tenantId  String
   featureId String
-  env       Environment // dev, staging, prod
-  enabled   Boolean     @default(false) // Ana açma/kapama
+  env       Environment
+  enabled   Boolean     @default(false)
   createdAt DateTime    @default(now())
   updatedAt DateTime    @updatedAt
 
-  // Gelişmiş Değerlendirme (Case'in 1. maddesi)
   strategy      EvaluationStrategy @default(BOOLEAN)
-  strategyValue Json?              // PERCENTAGE için { "percentage": 50 }, USER için { "userIds": ["id1", "id2"] }
+  strategyValue Json?
 
-  // İlişkiler
+  // Relations
   tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   feature Feature @relation(fields: [featureId], references: [id], onDelete: Cascade)
 
-  // Performans için kompozit indeks (Case'de önerilen)
   @@index([tenantId, env])
-  // Bir tenant, bir özellik ve bir ortam için sadece bir kayıt olmalı
   @@unique([tenantId, featureId, env])
 }
 
-// Case'de istenen Audit Logging (2. madde)
 model AuditLog {
   id        String   @id @default(cuid())
   tenantId  String
-  actor     String // Değişikliği kimin/neyin yaptığı (Örn: Tenant Adı veya API Key)
-  action    String // CREATE, UPDATE, DELETE
-  entity    String // Hangi varlık (FeatureFlag)
+  actor     String
+  action    String
+  entity    String
   entityId  String
-  diff      Json?    // Önceki ve sonraki durum
+  diff      Json?
   createdAt DateTime @default(now())
 
   tenant Tenant @relation(fields: [tenantId], references: [id])
