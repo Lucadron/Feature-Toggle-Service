@@ -21,16 +21,18 @@ const store = new RedisStore({
  */
 export const tenantRateLimiter = rateLimit({
     store: store,
-    windowMs: 15 * 60 * 1000,
-    limit:40,
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    limit: 20, // Limit each tenant to 100 requests per windowMs
     standardHeaders: 'draft-7',
     legacyHeaders: false,
 
     // Use the tenantId as the key
     keyGenerator: (req: Request, res: Response): string => {
-        return req.tenantId || req.ip || 'unknown';
+        // This limiter runs *after* authentication, so req.tenantId should exist.
+        // If it doesn't, fall back to a generic key. This avoids the IP warning.
+        return req.tenantId || 'unauthenticated_fallback';
     },
-    
+
     handler: (req, res, next, options) => {
         res.status(options.statusCode).json({
             error: `Too many requests. You are limited to ${options.limit} requests per 15 minutes.`,

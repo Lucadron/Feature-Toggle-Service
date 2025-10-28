@@ -5,9 +5,53 @@ import { compareSecret, generateToken } from '../services/auth.service';
 const router = Router();
 
 /**
- * POST /auth/token
- * Authenticates a tenant and returns a JWT
+ * @openapi
+ * /auth/token:
+ *   post:
+ *     tags: [Authentication]
+ *     summary: Authenticate and get JWT
+ *     description: Authenticates a tenant using apiKey and apiSecret, returning a JWT.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [apiKey, apiSecret]
+ *             properties:
+ *               apiKey:
+ *                 type: string
+ *                 description: Public API key of the tenant.
+ *                 example: zebra_api_key
+ *               apiSecret:
+ *                 type: string
+ *                 description: Secret key for the tenant (used only for authentication).
+ *                 example: zebra_secret_123
+ *     responses:
+ *       '200':
+ *         description: Authentication successful, JWT returned.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: Authentication successful
+ *                 token:
+ *                   type: string
+ *                   description: JWT token for API access.
+ *                   example: eyJhbGciOiJIUzI1NiIsIn...
+ *       '400':
+ *         description: Bad Request - Missing apiKey or apiSecret.
+ *       '401':
+ *         description: Unauthorized - Invalid credentials.
+ *       '500':
+ *         description: Internal Server Error.
  */
+
+
+
 router.post('/token', async (req: Request, res: Response) => {
     const { apiKey, apiSecret } = req.body;
 
@@ -18,7 +62,6 @@ router.post('/token', async (req: Request, res: Response) => {
     }
 
     try {
-        // 1. Find tenant by their public apiKey
         const tenant = await prisma.tenant.findUnique({
             where: { apiKey },
         });
@@ -27,14 +70,12 @@ router.post('/token', async (req: Request, res: Response) => {
             return res.status(401).json({ error: 'Invalid credentials' });
         }
 
-        // 2. Compare the provided secret with the hashed secret in DB
         const isMatch = await compareSecret(apiSecret, tenant.apiSecret);
 
         if (!isMatch) {
             return res.status(401).json({ error: 'Invalid credentials' });
         }
 
-        // 3. Generate and return JWT
         const token = generateToken(tenant);
         return res.status(200).json({
             message: 'Authentication successful',

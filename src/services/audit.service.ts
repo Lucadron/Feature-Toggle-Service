@@ -1,8 +1,8 @@
 import { Prisma } from '@prisma/client';
 import prisma from '../prisma';
 
-type AuditAction = 'CREATE' | 'UPDATE' | 'DELETE';
-type AuditEntity = 'FeatureFlag';
+type AuditAction = 'CREATE' | 'UPDATE' | 'DELETE' | 'PROMOTE';
+type AuditEntity = 'FeatureFlag' | 'Environment';
 
 interface AuditLogOptions {
     tenantId: string;
@@ -10,15 +10,15 @@ interface AuditLogOptions {
     action: AuditAction;
     entity: AuditEntity;
     entityId: string;
-    before?: any;
-    after?: any;
+    diff?: any; // Changed from 'before' and 'after' to 'diff'
 }
 
 /**
  * Creates an audit log entry in the database.
  */
 export const createAuditLog = async (options: AuditLogOptions) => {
-    const { tenantId, actor, action, entity, entityId, before, after } = options;
+    // Use 'diff' directly from options
+    const { tenantId, actor, action, entity, entityId, diff } = options;
 
     try {
         await prisma.auditLog.create({
@@ -28,13 +28,11 @@ export const createAuditLog = async (options: AuditLogOptions) => {
                 action,
                 entity,
                 entityId,
-                diff: {
-                    before: before || null,
-                    after: after || null
-                },
+                diff: diff || null, // Pass the diff object directly
             },
         });
     } catch (error) {
         console.error('Failed to create audit log:', error);
+        // We don't block the main request if logging fails
     }
 };

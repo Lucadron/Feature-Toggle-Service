@@ -8,9 +8,52 @@ const router = Router();
 router.use(authenticate);
 
 /**
- * GET /audit
- * Retrieves paginated audit logs for the authenticated tenant.
+ * @openapi
+ * /audit:
+ *   get:
+ *     tags: [Audit]
+ *     summary: Get audit logs
+ *     description: Returns paginated audit logs for the authenticated tenant (newest first).
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           default: 1
+ *       - in: query
+ *         name: pageSize
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           maximum: 100
+ *           default: 20
+ *     responses:
+ *       '200':
+ *         description: Paginated audit logs.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 items:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/AuditLog'
+ *                 page:
+ *                   type: integer
+ *                 pageSize:
+ *                   type: integer
+ *                 total:
+ *                   type: integer
+ *       '401':
+ *         description: Unauthorized.
+ *       '500':
+ *         description: Internal Server Error.
  */
+
 router.get('/', async (req: Request, res: Response) => {
     const tenantId = req.tenantId as string;
     const { page = '1', limit = '20' } = req.query;

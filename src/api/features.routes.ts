@@ -9,17 +9,100 @@ import {
     createCacheKey,
 } from '../services/cache.service';
 import { createAuditLog } from '../services/audit.service';
+import { flagEvaluationsTotal } from '../services/metrics.service';
 
 const router = Router();
-
-// Secure all routes in this file with the authentication middleware
 router.use(authenticate);
 
 /**
- * GET /features
- * Retrieves the evaluated feature list for a tenant and environment.
- * Implements Caching, Pagination, and Filtering.
+ * @openapi
+ * /features:
+ *   get:
+ *     tags: [Features]
+ *     summary: Get evaluated feature flags
+ *     description: Retrieves evaluated feature flags for the authenticated tenant in the given environment. Supports caching, pagination and optional name filter.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: env
+ *         required: true
+ *         schema:
+ *           type: string
+ *           enum: [dev, staging, prod]
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           default: 1
+ *       - in: query
+ *         name: pageSize
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           maximum: 100
+ *           default: 20
+ *       - in: query
+ *         name: filter
+ *         schema:
+ *           type: string
+ *     responses:
+ *       '200':
+ *         description: Paginated evaluated feature flags.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 items:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/FeatureFlag'
+ *                 page:
+ *                   type: integer
+ *                 pageSize:
+ *                   type: integer
+ *                 total:
+ *                   type: integer
+ *   post:
+ *     tags: [Features]
+ *     summary: Create or update a feature flag (Upsert)
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/FeatureFlag'
+ *     responses:
+ *       '201':
+ *         description: Created/Updated.
+ * /features/{id}:
+ *   delete:
+ *     tags: [Features]
+ *     summary: Delete a feature flag
+ *     description: Deletes a specific feature flag by its id.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: FeatureFlag id.
+ *     responses:
+ *       '204':
+ *         description: No Content.
+ *       '401':
+ *         description: Unauthorized.
+ *       '404':
+ *         description: Not Found.
  */
+
+
 router.get('/', async (req: Request, res: Response) => {
     const tenantId = req.tenantId as string;
     const {
@@ -30,7 +113,11 @@ router.get('/', async (req: Request, res: Response) => {
     } = req.query;
 
     if (!env || !(Object.values(Environment).includes(env as Environment))) {
-        return res.status(400).json({ error: 'Valid "env" query param (dev, staging, prod) is required.' });
+        return res
+            .status(400)
+            .json({
+                error: 'Valid "env" query param (dev, staging, prod) is required.',
+            });
     }
 
     const pageNum = parseInt(page as string, 10);
@@ -79,21 +166,26 @@ router.get('/', async (req: Request, res: Response) => {
         const evaluatedFlags = featureFlags.map((flag) => {
             let isEnabled = flag.enabled;
 
+            // --- Metrics ---
+            flagEvaluationsTotal.inc({
+                tenant_id: tenantId,
+                feature_name: flag.feature.name,
+                strategy: flag.strategy,
+            });
+            // -------------
+
             if (isEnabled) {
                 switch (flag.strategy) {
                     case 'PERCENTAGE':
-                        // Example evaluation: 50% = 0.5. Random float > 0.5 = false
-                        const percentage = (flag.strategyValue as Prisma.JsonObject)?.percentage as number || 0;
-                        isEnabled = Math.random() < (percentage / 100);
+                        const percentage =
+                            ((flag.strategyValue as Prisma.JsonObject)?.percentage as number) ||
+                            0;
+                        isEnabled = Math.random() < percentage / 100;
                         break;
                     case 'USER':
-                        // In a real app, you'd check a `userId` from req.query against the list.
-                        // For this case, we just show the strategy exists.
-                        // We'll assume for this general GET, it's not user-specific.
                         break;
                     case 'BOOLEAN':
                     default:
-                        // isEnabled is already set
                         break;
                 }
             }
@@ -133,18 +225,17 @@ router.get('/', async (req: Request, res: Response) => {
     }
 });
 
-/**
- * POST /features
- * Creates or updates a feature flag (Upsert).
- * Invalidates the cache.
- */
 router.post('/', async (req: Request, res: Response) => {
     const tenantId = req.tenantId as string;
-    const { featureId, env, enabled, strategy, strategyValue }
-        = req.body as Prisma.FeatureFlagCreateInput & { featureId: string };
+    const { featureId, env, enabled, strategy, strategyValue } =
+        req.body as Prisma.FeatureFlagCreateInput & { featureId: string };
 
     if (!featureId || !env || typeof enabled !== 'boolean' || !strategy) {
-        return res.status(400).json({ error: 'Missing required fields: featureId, env, enabled, strategy' });
+        return res
+            .status(400)
+            .json({
+                error: 'Missing required fields: featureId, env, enabled, strategy',
+            });
     }
 
     const environment = env as Environment;
@@ -189,8 +280,11 @@ router.post('/', async (req: Request, res: Response) => {
             action: existingFlag ? 'UPDATE' : 'CREATE',
             entity: 'FeatureFlag',
             entityId: upsertedFlag.id,
-            before: existingFlag || null,
-            after: upsertedFlag,
+            // Pass 'before' and 'after' inside the 'diff' object
+            diff: {
+                before: existingFlag || null,
+                after: upsertedFlag,
+            },
         });
 
         // --- Cache Invalidation ---
@@ -200,29 +294,56 @@ router.post('/', async (req: Request, res: Response) => {
         return res.status(201).json(upsertedFlag);
     } catch (error) {
         console.error('POST /features error:', error);
-        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
-            return res.status(409).json({ error: 'Conflict: This feature flag already exists.' });
+        if (
+            error instanceof Prisma.PrismaClientKnownRequestError &&
+            error.code === 'P2002'
+        ) {
+            return res
+                .status(409)
+                .json({ error: 'Conflict: This feature flag already exists.' });
         }
         return res.status(500).json({ error: 'Internal server error' });
     }
 });
 
 /**
- * DELETE /features/:id
- * Deletes a feature flag by its unique ID.
- * Invalidates the cache and creates an audit log.
+ * @swagger
+ * /features/{id}:
+ * delete:
+ * summary: Delete a feature flag
+ * description: Deletes a specific feature flag by its ID. Invalidates cache and creates an audit log.
+ * tags: [Features]
+ * security:
+ * - BearerAuth: []
+ * parameters:
+ * - in: path
+ * name: id
+ * schema:
+ * type: string
+ * required: true
+ * description: The unique ID of the feature flag.
+ * responses:
+ * "204":
+ * description: Feature flag deleted successfully.
+ * "401":
+ * description: Unauthorized
+ * "404":
+ * description: Feature flag not found.
  */
 router.delete('/:id', async (req: Request, res: Response) => {
     const tenantId = req.tenantId as string;
-    const { id } = req.params;
+    const { id } = req.params; // Get ID from URL param
 
     try {
+        // Find the flag first to get its 'env' for cache invalidation
         const flagToDelete = await prisma.featureFlag.findUnique({
-            where: { id: id, tenantId: tenantId },
+            where: { id: id, tenantId: tenantId }, // Ensure tenant owns this flag
         });
 
         if (!flagToDelete) {
-            return res.status(404).json({ error: 'Feature flag not found or you do not have permission.' });
+            return res
+                .status(404)
+                .json({ error: 'Feature flag not found or you do not have permission.' });
         }
 
         // --- Audit Logging (Log *before* deleting) ---
@@ -232,8 +353,11 @@ router.delete('/:id', async (req: Request, res: Response) => {
             action: 'DELETE',
             entity: 'FeatureFlag',
             entityId: flagToDelete.id,
-            before: flagToDelete,
-            after: null,
+            // Pass 'before' and 'after' inside the 'diff' object
+            diff: {
+                before: flagToDelete,
+                after: null,
+            },
         });
 
         // Now delete it
@@ -245,10 +369,11 @@ router.delete('/:id', async (req: Request, res: Response) => {
         const cacheKey = createCacheKey(tenantId, flagToDelete.env);
         await deleteFromCache(cacheKey);
 
-        return res.status(204).send();
+        return res.status(204).send(); // 204 No Content - successful deletion
     } catch (error) {
         console.error('DELETE /features/:id error:', error);
         return res.status(500).json({ error: 'Internal server error' });
     }
 });
+
 export default router;
