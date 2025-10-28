@@ -22,11 +22,11 @@ const router = Router();
  *               apiKey:
  *                 type: string
  *                 description: Public API key of the tenant.
- *                 example: zebra_api_key
+ *                 example: "zebra_api_key"
  *               apiSecret:
  *                 type: string
  *                 description: Secret key for the tenant (used only for authentication).
- *                 example: zebra_secret_123
+ *                 example: "zebra_secret_123"
  *     responses:
  *       '200':
  *         description: Authentication successful, JWT returned.
@@ -44,10 +44,22 @@ const router = Router();
  *                   example: eyJhbGciOiJIUzI1NiIsIn...
  *       '400':
  *         description: Bad Request - Missing apiKey or apiSecret.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  *       '401':
  *         description: Unauthorized - Invalid credentials.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  *       '500':
  *         description: Internal Server Error.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  */
 
 

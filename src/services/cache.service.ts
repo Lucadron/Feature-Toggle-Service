@@ -1,7 +1,7 @@
 import { createClient } from 'redis';
 
 // Initialize Redis Client
-const redisClient = createClient({
+export const redisClient = createClient({
     // Docker'daki Redis'e bağlanır
     url: 'redis://localhost:6379',
 });

@@ -22,7 +22,7 @@ router.use(authenticate);
  *     summary: Get evaluated feature flags
  *     description: Retrieves evaluated feature flags for the authenticated tenant in the given environment. Supports caching, pagination and optional name filter.
  *     security:
- *       - bearerAuth: []
+ *       - BearerAuth: []
  *     parameters:
  *       - in: query
  *         name: env
@@ -30,23 +30,30 @@ router.use(authenticate);
  *         schema:
  *           type: string
  *           enum: [dev, staging, prod]
+ *         description: Target environment.
  *       - in: query
  *         name: page
+ *         required: false
  *         schema:
  *           type: integer
  *           minimum: 1
  *           default: 1
+ *         description: Page number.
  *       - in: query
  *         name: pageSize
+ *         required: false
  *         schema:
  *           type: integer
  *           minimum: 1
  *           maximum: 100
  *           default: 20
+ *         description: Items per page.
  *       - in: query
  *         name: filter
+ *         required: false
  *         schema:
  *           type: string
+ *         description: Case-insensitive substring filter by feature name.
  *     responses:
  *       '200':
  *         description: Paginated evaluated feature flags.
@@ -55,21 +62,54 @@ router.use(authenticate);
  *             schema:
  *               type: object
  *               properties:
- *                 items:
+ *                 source:
+ *                   type: string
+ *                   description: "'cache' or 'database'"
+ *                   example: cache
+ *                 data:
  *                   type: array
  *                   items:
- *                     $ref: '#/components/schemas/FeatureFlag'
- *                 page:
- *                   type: integer
- *                 pageSize:
- *                   type: integer
- *                 total:
- *                   type: integer
+ *                     type: object
+ *                     properties:
+ *                       id: { type: string }
+ *                       name: { type: string }
+ *                       description: { type: string, nullable: true }
+ *                       enabled: { type: boolean }
+ *                       env: { type: string }
+ *                       strategy: { type: string }
+ *                 pagination:
+ *                   type: object
+ *                   properties:
+ *                     total: { type: integer }
+ *                     page: { type: integer }
+ *                     limit:
+ *                       type: integer
+ *                       description: Same as pageSize
+ *                     totalPages: { type: integer }
+ *       '400':
+ *         description: Bad Request - Missing/invalid env.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       '401':
+ *         description: Unauthorized - Invalid or missing JWT.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       '500':
+ *         description: Internal Server Error.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  *   post:
  *     tags: [Features]
  *     summary: Create or update a feature flag (Upsert)
+ *     description: Creates or updates the flag for the tenant+feature+environment. Invalidates relevant cache and writes an audit log.
  *     security:
- *       - bearerAuth: []
+ *       - BearerAuth: []
  *     requestBody:
  *       required: true
  *       content:
@@ -78,28 +118,71 @@ router.use(authenticate);
  *             $ref: '#/components/schemas/FeatureFlag'
  *     responses:
  *       '201':
- *         description: Created/Updated.
+ *         description: Created/Updated. Returns the full feature flag object.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/FeatureFlag'
+ *       '400':
+ *         description: Bad Request - Validation error.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       '401':
+ *         description: Unauthorized - Invalid or missing JWT.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       '409':
+ *         description: Conflict - Unique constraint violation (rare with upsert).
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       '500':
+ *         description: Internal Server Error.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  * /features/{id}:
  *   delete:
  *     tags: [Features]
- *     summary: Delete a feature flag
- *     description: Deletes a specific feature flag by its id.
+ *     summary: Delete a feature flag by ID
+ *     description: Deletes a specific feature flag by its unique instance ID. Invalidates cache and writes an audit log.
  *     security:
- *       - bearerAuth: []
+ *       - BearerAuth: []
  *     parameters:
  *       - in: path
  *         name: id
  *         required: true
  *         schema:
  *           type: string
- *         description: FeatureFlag id.
+ *           format: cuid
+ *         description: The unique CUID of the FeatureFlag instance.
  *     responses:
  *       '204':
- *         description: No Content.
+ *         description: No Content - Successfully deleted.
  *       '401':
- *         description: Unauthorized.
+ *         description: Unauthorized - Invalid or missing JWT.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  *       '404':
- *         description: Not Found.
+ *         description: Not Found - FeatureFlag not found for this tenant.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       '500':
+ *         description: Internal Server Error.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  */
 
 
@@ -220,7 +303,17 @@ router.get('/', async (req: Request, res: Response) => {
             ...responsePayload,
         });
     } catch (error) {
-        console.error('GET /features error:', error);
+        console.error('POST /features error:', error);
+        // Directly check the error code for P2003
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2003') {
+            // Make sure featureId is accessible here or use a generic message
+            // Let's use a generic message for safety
+            return res.status(400).json({ error: 'Invalid reference: The specified featureId does not exist.' });
+        }
+        // Keep the P2002 check if needed (though upsert handles unique constraints)
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+            return res.status(409).json({ error: 'Conflict: This feature flag already exists.' });
+        }
         return res.status(500).json({ error: 'Internal server error' });
     }
 });

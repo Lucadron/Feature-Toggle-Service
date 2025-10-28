@@ -15,21 +15,25 @@ router.use(authenticate);
  *     summary: Get audit logs
  *     description: Returns paginated audit logs for the authenticated tenant (newest first).
  *     security:
- *       - bearerAuth: []
+ *       - BearerAuth: []
  *     parameters:
  *       - in: query
  *         name: page
+ *         required: false
  *         schema:
  *           type: integer
  *           minimum: 1
  *           default: 1
+ *         description: Page number for pagination.
  *       - in: query
  *         name: pageSize
+ *         required: false
  *         schema:
  *           type: integer
  *           minimum: 1
  *           maximum: 100
  *           default: 20
+ *         description: Items per page.
  *     responses:
  *       '200':
  *         description: Paginated audit logs.
@@ -38,20 +42,35 @@ router.use(authenticate);
  *             schema:
  *               type: object
  *               properties:
- *                 items:
+ *                 data:
  *                   type: array
  *                   items:
  *                     $ref: '#/components/schemas/AuditLog'
- *                 page:
- *                   type: integer
- *                 pageSize:
- *                   type: integer
- *                 total:
- *                   type: integer
+ *                 pagination:
+ *                   type: object
+ *                   properties:
+ *                     total: { type: integer }
+ *                     page: { type: integer }
+ *                     limit: { type: integer }
+ *                     totalPages: { type: integer }
+ *       '400':
+ *         description: Bad Request - Invalid page or pageSize.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  *       '401':
- *         description: Unauthorized.
+ *         description: Unauthorized - Invalid or missing JWT.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  *       '500':
  *         description: Internal Server Error.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  */
 
 router.get('/', async (req: Request, res: Response) => {

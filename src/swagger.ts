@@ -74,7 +74,7 @@ const options: swaggerJSDoc.Options = {
                 },
             },
             securitySchemes: {
-                bearerAuth: {
+                BearerAuth: {
                     type: 'http',
                     scheme: 'bearer',
                     bearerFormat: 'JWT',

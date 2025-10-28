@@ -4,7 +4,7 @@ import { createClient } from 'redis';
 import { Request, Response } from 'express';
 
 // Create a separate Redis client for rate limiting
-const rateLimitClient = createClient({
+export const rateLimitClient = createClient({
     url: 'redis://localhost:6379',
 });
 rateLimitClient.connect().catch(console.error);

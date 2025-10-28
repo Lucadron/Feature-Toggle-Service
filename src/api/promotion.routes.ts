@@ -19,9 +19,9 @@ router.use(authenticate);
  *   post:
  *     tags: [Promotion]
  *     summary: Promote flags between environments
- *     description: Promotes all feature flags from a source environment to a target environment using upsert. Invalidates target environment cache.
+ *     description: Promotes all feature flags from a source environment to a target environment using upsert. Invalidates target environment cache and writes an audit log.
  *     security:
- *       - bearerAuth: []
+ *       - BearerAuth: []
  *     requestBody:
  *       required: true
  *       content:
@@ -33,33 +33,50 @@ router.use(authenticate);
  *               sourceEnv:
  *                 type: string
  *                 enum: [dev, staging, prod]
+ *                 description: The source environment to promote flags from.
  *               targetEnv:
  *                 type: string
  *                 enum: [dev, staging, prod]
- *               mode:
- *                 type: string
- *                 enum: [dry-run, merge, override]
- *                 default: dry-run
+ *                 description: The target environment to promote flags to (must be different from source).
  *     responses:
  *       '200':
- *         description: Promotion result.
+ *         description: Promotion successful.
  *         content:
  *           application/json:
  *             schema:
  *               type: object
  *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: Promotion successful.
  *                 promotedCount:
  *                   type: integer
- *                 mode:
- *                   type: string
+ *                   description: Number of flags processed.
+ *                   example: 5
  *       '400':
- *         description: Bad Request (invalid env or same env).
+ *         description: Bad Request (invalid env, same env, or promotion failure).
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  *       '401':
- *         description: Unauthorized.
+ *         description: Unauthorized - Invalid or missing JWT.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  *       '404':
- *         description: No source flags found.
+ *         description: Not Found - No source flags found in the specified environment for this tenant.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  *       '500':
  *         description: Internal Server Error.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  */
 
 

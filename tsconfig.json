@@ -15,7 +15,7 @@
     },
     "include": [
         "src/**/*"
-    ],
+, "tsconfig.test.json", "jest.config.js"    ],
     "exclude": [
         "node_modules"
     ],
