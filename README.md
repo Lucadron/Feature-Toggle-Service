@@ -94,3 +94,13 @@ Run the integration tests using Jest:
 
 ```bash
 npm test
+```
+## Known Issues / Limitations
+Feature Tests: src/__tests__/features.test.ts contains failing tests related to foreign key constraints (P2003) during POST operations and pagination logic. This likely indicates issues with test isolation or setup regarding seed data consistency.
+
+Open Handles in Tests: Jest may report open handles after tests complete (--detectOpenHandles). This is likely due to Redis client connections not being perfectly torn down in all test scenarios.
+
+Frontend UI: The React frontend (zebra-ui directory) setup encountered persistent configuration issues with Tailwind CSS/PostCSS integration within the allocated time. The UI components (App.tsx contains basic structure) are incomplete and non-functional.
+
+Schema Migration Workflow: A formal process for production database schema changes (e.g., zero-downtime migration strategy) is not detailed but would typically involve review, backup, phased rollout, and monitoring. Prisma Migrate handles the script generation and application.
+
