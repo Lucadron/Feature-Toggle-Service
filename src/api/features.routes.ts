@@ -18,19 +18,13 @@ router.use(authenticate);
  * @openapi
  * /features:
  *   get:
- *     tags: [Features]
- *     summary: Get evaluated feature flags
- *     description: Retrieves evaluated feature flags for the authenticated tenant in the given environment. Supports caching, pagination and optional name filter.
+ *     tags:
+ *       - Features
+ *     summary: List feature flags
+ *     description: Returns paginated feature flags.
  *     security:
- *       - BearerAuth: []
+ *       - bearerAuth: []
  *     parameters:
- *       - in: query
- *         name: env
- *         required: true
- *         schema:
- *           type: string
- *           enum: [dev, staging, prod]
- *         description: Target environment.
  *       - in: query
  *         name: page
  *         required: false
@@ -38,25 +32,28 @@ router.use(authenticate);
  *           type: integer
  *           minimum: 1
  *           default: 1
- *         description: Page number.
  *       - in: query
- *         name: pageSize
+ *         name: limit
  *         required: false
  *         schema:
  *           type: integer
  *           minimum: 1
- *           maximum: 100
  *           default: 20
- *         description: Items per page.
  *       - in: query
  *         name: filter
  *         required: false
  *         schema:
  *           type: string
- *         description: Case-insensitive substring filter by feature name.
+ *           description: Filter by key or name
+ *       - in: query
+ *         name: env
+ *         required: false
+ *         schema:
+ *           type: string
+ *           enum: [DEV, TEST, STAGE, PROD]
  *     responses:
  *       '200':
- *         description: Paginated evaluated feature flags.
+ *         description: Paginated feature flags
  *         content:
  *           application/json:
  *             schema:
@@ -69,121 +66,190 @@ router.use(authenticate);
  *                 data:
  *                   type: array
  *                   items:
- *                     type: object
- *                     properties:
- *                       id: { type: string }
- *                       name: { type: string }
- *                       description: { type: string, nullable: true }
- *                       enabled: { type: boolean }
- *                       env: { type: string }
- *                       strategy: { type: string }
+ *                     $ref: '#/components/schemas/FeatureFlag'
  *                 pagination:
- *                   type: object
- *                   properties:
- *                     total: { type: integer }
- *                     page: { type: integer }
- *                     limit:
- *                       type: integer
- *                       description: Same as pageSize
- *                     totalPages: { type: integer }
+ *                   $ref: '#/components/schemas/Pagination'
  *       '400':
- *         description: Bad Request - Missing/invalid env.
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Error'
+ *         $ref: '#/components/responses/BadRequest'
  *       '401':
- *         description: Unauthorized - Invalid or missing JWT.
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Error'
+ *         $ref: '#/components/responses/Unauthorized'
  *       '500':
- *         description: Internal Server Error.
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Error'
+ *         $ref: '#/components/responses/ServerError'
+ *
  *   post:
- *     tags: [Features]
- *     summary: Create or update a feature flag (Upsert)
- *     description: Creates or updates the flag for the tenant+feature+environment. Invalidates relevant cache and writes an audit log.
+ *     tags:
+ *       - Features
+ *     summary: Create a feature flag
  *     security:
- *       - BearerAuth: []
+ *       - bearerAuth: []
  *     requestBody:
  *       required: true
  *       content:
  *         application/json:
  *           schema:
- *             $ref: '#/components/schemas/FeatureFlag'
+ *             $ref: '#/components/schemas/CreateFeatureFlagDto'
  *     responses:
  *       '201':
- *         description: Created/Updated. Returns the full feature flag object.
+ *         description: Created
  *         content:
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/FeatureFlag'
  *       '400':
- *         description: Bad Request - Validation error.
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Error'
+ *         $ref: '#/components/responses/BadRequest'
  *       '401':
- *         description: Unauthorized - Invalid or missing JWT.
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Error'
- *       '409':
- *         description: Conflict - Unique constraint violation (rare with upsert).
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Error'
+ *         $ref: '#/components/responses/Unauthorized'
  *       '500':
- *         description: Internal Server Error.
+ *         $ref: '#/components/responses/ServerError'
+ */
+
+
+/**
+ * @openapi
+ * /features/{id}:
+ *   parameters:
+ *     - in: path
+ *       name: id
+ *       required: true
+ *       schema:
+ *         type: string
+ *       description: Feature flag identifier (UUID)
+ *
+ *   get:
+ *     tags:
+ *       - Features
+ *     summary: Get a feature flag
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       '200':
+ *         description: OK
  *         content:
  *           application/json:
  *             schema:
- *               $ref: '#/components/schemas/Error'
- * /features/{id}:
- *   delete:
- *     tags: [Features]
- *     summary: Delete a feature flag by ID
- *     description: Deletes a specific feature flag by its unique instance ID. Invalidates cache and writes an audit log.
+ *               $ref: '#/components/schemas/FeatureFlag'
+ *       '401':
+ *         $ref: '#/components/responses/Unauthorized'
+ *       '404':
+ *         $ref: '#/components/responses/NotFound'
+ *       '500':
+ *         $ref: '#/components/responses/ServerError'
+ *
+ *   put:
+ *     tags:
+ *       - Features
+ *     summary: Update a feature flag
  *     security:
- *       - BearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *           format: cuid
- *         description: The unique CUID of the FeatureFlag instance.
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/UpdateFeatureFlagDto'
+ *     responses:
+ *       '200':
+ *         description: Updated
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/FeatureFlag'
+ *       '400':
+ *         $ref: '#/components/responses/BadRequest'
+ *       '401':
+ *         $ref: '#/components/responses/Unauthorized'
+ *       '404':
+ *         $ref: '#/components/responses/NotFound'
+ *       '500':
+ *         $ref: '#/components/responses/ServerError'
+ *
+ *   delete:
+ *     tags:
+ *       - Features
+ *     summary: Delete a feature flag
+ *     security:
+ *       - bearerAuth: []
  *     responses:
  *       '204':
- *         description: No Content - Successfully deleted.
+ *         description: Deleted
  *       '401':
- *         description: Unauthorized - Invalid or missing JWT.
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Error'
+ *         $ref: '#/components/responses/Unauthorized'
  *       '404':
- *         description: Not Found - FeatureFlag not found for this tenant.
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Error'
+ *         $ref: '#/components/responses/NotFound'
  *       '500':
- *         description: Internal Server Error.
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Error'
+ *         $ref: '#/components/responses/ServerError'
  */
+
+
+/**
+ * @openapi
+ * components:
+ *   securitySchemes:
+ *     bearerAuth:
+ *       type: http
+ *       scheme: bearer
+ *       bearerFormat: JWT
+ *
+ *   schemas:
+ *     FeatureFlag:
+ *       type: object
+ *       required: [id, key, enabled, environment]
+ *       properties:
+ *         id: { type: string, format: uuid }
+ *         key: { type: string }
+ *         name: { type: string }
+ *         description: { type: string, nullable: true }
+ *         enabled: { type: boolean }
+ *         environment: { type: string, enum: [DEV, TEST, STAGE, PROD] }
+ *         variants:
+ *           type: array
+ *           items:
+ *             type: object
+ *             properties:
+ *               name: { type: string }
+ *               weight: { type: number }
+ *     Pagination:
+ *       type: object
+ *       properties:
+ *         page: { type: integer, minimum: 1 }
+ *         limit: { type: integer, minimum: 1 }
+ *         total: { type: integer, minimum: 0 }
+ *
+ *     CreateFeatureFlagDto:
+ *       type: object
+ *       required: [key, name, environment]
+ *       properties:
+ *         key: { type: string }
+ *         name: { type: string }
+ *         description: { type: string, nullable: true }
+ *         environment: { type: string, enum: [DEV, TEST, STAGE, PROD] }
+ *         enabled: { type: boolean, default: false }
+ *
+ *     UpdateFeatureFlagDto:
+ *       type: object
+ *       properties:
+ *         name: { type: string }
+ *         description: { type: string, nullable: true }
+ *         enabled: { type: boolean }
+ *         variants:
+ *           type: array
+ *           items:
+ *             type: object
+ *             properties:
+ *               name: { type: string }
+ *               weight: { type: number }
+ *
+ *   responses:
+ *     BadRequest:
+ *       description: Bad request
+ *     Unauthorized:
+ *       description: Unauthorized
+ *     NotFound:
+ *       description: Not found
+ *     ServerError:
+ *       description: Internal server error
+ */
+
 
 
 router.get('/', async (req: Request, res: Response) => {
@@ -192,7 +258,7 @@ router.get('/', async (req: Request, res: Response) => {
         env,
         page = '1',
         limit = '20',
-        filter, // Optional: filter by feature name
+        filter,
     } = req.query;
 
     if (!env || !(Object.values(Environment).includes(env as Environment))) {
@@ -275,9 +341,10 @@ router.get('/', async (req: Request, res: Response) => {
 
             return {
                 id: flag.id,
+                featureId: flag.featureId,
                 name: flag.feature.name,
                 description: flag.feature.description,
-                enabled: isEnabled, // The final evaluated value
+                enabled: isEnabled,
                 env: flag.env,
                 strategy: flag.strategy,
             };
@@ -399,30 +466,6 @@ router.post('/', async (req: Request, res: Response) => {
     }
 });
 
-/**
- * @swagger
- * /features/{id}:
- * delete:
- * summary: Delete a feature flag
- * description: Deletes a specific feature flag by its ID. Invalidates cache and creates an audit log.
- * tags: [Features]
- * security:
- * - BearerAuth: []
- * parameters:
- * - in: path
- * name: id
- * schema:
- * type: string
- * required: true
- * description: The unique ID of the feature flag.
- * responses:
- * "204":
- * description: Feature flag deleted successfully.
- * "401":
- * description: Unauthorized
- * "404":
- * description: Feature flag not found.
- */
 router.delete('/:id', async (req: Request, res: Response) => {
     const tenantId = req.tenantId as string;
     const { id } = req.params; // Get ID from URL param
