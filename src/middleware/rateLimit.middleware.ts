@@ -22,7 +22,7 @@ const store = new RedisStore({
 export const tenantRateLimiter = rateLimit({
     store: store,
     windowMs: 15 * 60 * 1000, // 15 minutes
-    limit: 20, // Limit each tenant to 100 requests per windowMs
+    limit: 200,
     standardHeaders: 'draft-7',
     legacyHeaders: false,
 

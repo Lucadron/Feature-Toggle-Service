@@ -1,5 +1,6 @@
 import express, { Request, Response } from 'express';
 import dotenv from 'dotenv';
+import cors from 'cors';
 
 // Import services
 import './services/cache.service'; // Initializes Redis
@@ -27,8 +28,9 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Middlewares
+app.use(cors());
 app.use(express.json());
-app.use(observeRequests); // Add metrics middleware
+app.use(observeRequests);
 
 // --- API Routes ---
 
