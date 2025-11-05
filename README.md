@@ -1,44 +1,64 @@
-# Zebra Engineering Assignment: Feature Toggle Service
+
+# Feature Toggle Service
+📖 [Türkçe olarak görüntüle (README.tr.md)](README.tr.md)
 
 ## Overview
 
-This project implements a simplified Feature Toggle Service as per the Zebra Engineering assignment. It allows multiple tenants to manage and retrieve feature flags based on different environments (dev, staging, prod) via a REST API. The service includes authentication, caching, rate limiting, audit logging, and other production-ready features.
+This project is a comprehensive, multi-tenant Feature Toggle Service. It allows multiple tenants to manage and retrieve feature flags based on different environments (dev, staging, prod) via a REST API.
 
-## Features Implemented
+The service is built with a production-ready mindset, including JWT authentication, Redis caching for high performance, per-tenant rate limiting, detailed audit logging, and a functional React-based admin UI.
 
-* **Multi-Tenant & Environment-Based:** Feature flags are stored and retrieved per tenant and environment (`dev`, `staging`, `prod`).
-* **REST API:** Exposes endpoints for managing feature flags:
-    * `POST /auth/token`: Authenticates tenants using `apiKey` and `apiSecret` to issue JWTs.
-    * `GET /features`: Retrieves evaluated feature flags for a tenant and environment, supporting pagination (`page`, `limit`) and filtering (`filter` by name). Utilizes Redis caching.
-    * `POST /features`: Creates or updates (upsert) a feature flag for a specific tenant, feature, and environment. Invalidates cache and logs the change.
-    * `DELETE /features/{id}`: Deletes a specific feature flag instance by its unique ID. Invalidates cache and logs the change.
-    * `GET /audit`: Retrieves paginated audit logs for the authenticated tenant, showing changes made to feature flags.
-    * `POST /promote`: Promotes all feature flags from a source environment to a target environment for the authenticated tenant.
-* **Authentication:** Uses JWT (JSON Web Tokens) for securing API endpoints. Tokens are obtained via the `/auth/token` endpoint.
-* **Caching:** Implements a Redis caching layer for `GET /features` requests to ensure fast reads. Includes Time-To-Live (TTL) and cache invalidation logic on writes (`POST`, `DELETE`, `PROMOTE`).
-* **Evaluation Strategies:** Supports `BOOLEAN` and `PERCENTAGE` rollout strategies during flag evaluation in the `GET /features` endpoint. The strategy is stored per flag.
-* **Audit Logging:** Logs all create, update, delete, and promotion actions to an `audit_logs` table, including actor, timestamp, and a diff of changes (where applicable). Accessible via `GET /audit`.
-* **Environment Promotion:** Provides a `POST /promote` endpoint to safely copy/update flags from one environment (e.g., staging) to another (e.g., prod) within a database transaction.
-* **Rate Limiting:** Implements Redis-backed, per-tenant rate limiting on secured endpoints to prevent abuse. Includes standard `RateLimit-*` headers in responses.
-* **Database:** Uses PostgreSQL for data persistence, managed via Prisma ORM. Includes schema migrations.
-* **Observability:** Exposes basic Prometheus-compatible metrics at the `/metrics` endpoint, including counters for HTTP requests and feature flag evaluations.
-* **API Documentation:** Provides interactive API documentation using Swagger UI, accessible at `/api-docs`.
-* **Database Seeding:** Includes a `seed.ts` script (`npm run prisma:seed`) to populate the database with initial tenant and feature data for testing.
-* **Dockerized Setup:** Uses Docker Compose to easily set up and run the required PostgreSQL and Redis services.
-* **Testing:** Includes basic integration tests using Jest and Supertest for core endpoints (Authentication, Audit, Promotion). *(Note: `features.test.ts` contains known issues requiring further investigation).*
+## Core Features
+
+* **Multi-Tenant & Environment-Based:** Feature flags are scoped per tenant and environment (`dev`, `staging`, `prod`).
+* **Secure REST API:** Exposes a full suite of endpoints for managing the service:
+    * `POST /auth/token`: Authenticates a tenant using `apiKey` and `apiSecret` to issue a JWT.
+    * `GET /features`: Retrieves evaluated feature flags for a tenant/env. Supports pagination, filtering by name, and results are cached in Redis.
+    * `POST /features`: Creates or updates (upsert) a feature flag. Invalidates the cache and creates an audit log.
+    * `DELETE /features/{id}`: Deletes a specific feature flag instance by its ID. Invalidates cache and logs the change.
+    * `GET /audit`: Retrieves paginated audit logs for the authenticated tenant.
+    * `POST /promote`: Promotes all flags from one environment (e.g., staging) to another (e.g., prod) in a single transaction.
+* **Authentication:** Uses JWT (JSON Web Tokens) for securing all API endpoints (except `/auth/token` and `/health`).
+* **Caching:** Implements a Redis caching layer for `GET /features` to ensure fast reads. Cache is automatically invalidated on any write operation (`POST`, `DELETE`, `PROMOTE`).
+* **Evaluation Strategies:** Supports `BOOLEAN` and `PERCENTAGE` rollout strategies, applied in real-time on `GET /features` requests.
+* **Audit Logging:** Logs all C/U/D and promotion actions to an `audit_logs` table, including actor, timestamp, and a JSON diff of changes.
+* **Rate Limiting:** Implements Redis-backed, per-tenant rate limiting on all secured endpoints to prevent abuse.
+* **Observability:** Exposes a `/metrics` endpoint with Prometheus-compatible counters for HTTP requests and feature flag evaluations.
+* **API Documentation:** Provides interactive API documentation using **Swagger UI**, accessible at `/api-docs`.
+* **Frontend Admin UI:** A complete, functional single-page admin panel built with React, TypeScript, and Tailwind CSS. The UI allows users to:
+    * Authenticate using a JWT.
+    * Select an environment.
+    * View all feature flags for that environment (paginated).
+    * Toggle flags on or off.
+    * Create new feature flags.
+    * Delete feature flags.
 
 ## Tech Stack
 
-* **Backend:** Node.js, Express.js, TypeScript
-* **Database:** PostgreSQL
-* **ORM:** Prisma
-* **Caching/Rate Limiting:** Redis
-* **Authentication:** JWT (jsonwebtoken library), bcrypt
-* **Testing:** Jest, Supertest
-* **API Documentation:** Swagger UI, swagger-jsdoc
-* **Containerization:** Docker, Docker Compose
-* **Linting/Formatting:** (Assumed ESLint/Prettier setup if standard)
-* **Frontend (Attempted):** Vite, React, TypeScript, Axios *(Note: Encountered persistent build/configuration issues with Tailwind/PostCSS, UI component development was not completed due to time constraints).*
+| Domain | Technology | Purpose |
+| :--- | :--- | :--- |
+| **Backend** | Node.js, Express.js | Server runtime and framework |
+| | TypeScript | Type safety and modern JavaScript |
+| **Database** | PostgreSQL | Primary data persistence |
+| **ORM** | Prisma | Database access, schema management, and migrations |
+| **Caching** | Redis | Caching `GET /features` responses |
+| **Rate Limiting** | Redis | Storing rate limit counters (via `rate-limit-redis`) |
+| **Auth** | JWT (jsonwebtoken), bcrypt | Token generation/validation and password hashing |
+| **API Docs** | Swagger (swagger-jsdoc, swagger-ui-express) | Interactive API documentation |
+| **Observability** | Prometheus (prom-client) | Exposing metrics at `/metrics` |
+| **Testing** | Jest, Supertest | Integration testing for API endpoints |
+| **Containerization** | Docker, Docker Compose | Running ancillary services (Postgres, Redis) |
+| **Frontend** | React, Vite | UI library and build tooling |
+| | TypeScript | Type safety for the frontend |
+| | Tailwind CSS | Utility-first CSS framework for rapid styling |
+| | Axios | HTTP client for communicating with the backend |
+
+## Project Structure
+
+This repository is structured as a monorepo, containing both the backend service and the frontend UI in the same repository.
+
+* `/` (Root): The backend Node.js/Express service.
+* `/feature-toggle-service-ui`: The frontend React/Vite application.
 
 ## Setup & Running
 
@@ -47,24 +67,29 @@ This project implements a simplified Feature Toggle Service as per the Zebra Eng
 * npm (v8.x or later)
 * Docker & Docker Compose
 
-**Steps:**
+### 1. Backend Setup (Main Service)
 
-1.  **Clone the repository:**
+1.  **Navigate to the backend directory** (the root of this repository):
     ```bash
-    git clone <repository_url>
-    cd zebra-toggle-service
+    cd feature-toggle-service
     ```
 2.  **Install backend dependencies:**
     ```bash
     npm install
     ```
 3.  **Set up Environment Variables:**
-    * Copy the example environment file: `cp .env.example .env`
-    * Review and update the variables in `.env` if necessary (especially `JWT_SECRET`). The default `DATABASE_URL` matches the Docker Compose setup.
-4.  **Start Docker Services:**
+    * Create a `.env` file (you can copy `.env.example` if it exists).
+    * Ensure `DATABASE_URL` matches the Docker setup and add a `JWT_SECRET`.
+    * *Example `.env`:*
+        ```env
+        DATABASE_URL="postgresql://zebra:password@localhost:5432/feature_toggles?schema=public"
+        JWT_SECRET="YOUR_SUPER_SECRET_KEY_HERE"
+        CACHE_TTL=60
+        ```
+4.  **Start Docker Services (Postgres & Redis):**
     ```bash
     npm run db:up
-    # Wait for PostgreSQL and Redis containers to be healthy (check with 'docker ps')
+    # Wait for containers to be healthy (check with 'docker ps')
     ```
 5.  **Run Database Migrations:**
     ```bash
@@ -77,30 +102,39 @@ This project implements a simplified Feature Toggle Service as per the Zebra Eng
 7.  **Start the Backend Server (Development Mode):**
     ```bash
     npm run dev
-    # Server will be running on http://localhost:3000 (or specified PORT)
+    # Backend server will be running on http://localhost:3000
     ```
-8.  **(Optional - If Frontend Exists)** Navigate to the frontend directory (`cd ../zebra-ui`), run `npm install`, then `npm run dev`. Access the UI via the URL provided by Vite (e.g., `http://localhost:5173`).
 
-## API Documentation
+### 2. Frontend Setup (UI)
 
-Interactive API documentation is available via Swagger UI when the backend server is running:
-* [http://localhost:3000/api-docs](http://localhost:3000/api-docs)
+1.  **Open a new terminal.**
+2.  **Navigate to the frontend directory:**
+    ```bash
+    cd feature-toggle-service-ui
+    ```
+3.  **Install frontend dependencies:**
+    ```bash
+    npm install
+    ```
+4.  **Start the Frontend Server (Development Mode):**
+    ```bash
+    npm run dev
+    # Frontend UI will be running on http://localhost:5173 (or similar)
+    ```
 
-Use the `/auth/token` endpoint (or the seed script output) to get credentials, then use the "Authorize" button in Swagger UI to authenticate your requests.
+### 3. Accessing the Application
 
-## Testing
+* **API Service:** `http://localhost:3000`
+* **API Docs:** `http://localhost:3000/api-docs`
+* **Metrics:** `http://localhost:3000/metrics`
+* **Admin UI:** `http://localhost:5173`
 
-Run the integration tests using Jest:
+To use the UI, first get a token from the API (`/auth/token` endpoint via Swagger/Postman, using `apiKey: "zebra_api_key"` and `apiSecret: "zebra_secret_123"`) and paste it into the UI's login field.
+
+## Running Tests
+
+To run the backend integration tests:
 
 ```bash
+# From the root (backend) directory
 npm test
-```
-## Known Issues / Limitations
-Feature Tests: src/__tests__/features.test.ts contains failing tests related to foreign key constraints (P2003) during POST operations and pagination logic. This likely indicates issues with test isolation or setup regarding seed data consistency.
-
-Open Handles in Tests: Jest may report open handles after tests complete (--detectOpenHandles). This is likely due to Redis client connections not being perfectly torn down in all test scenarios.
-
-Frontend UI: The React frontend (zebra-ui directory) setup encountered persistent configuration issues with Tailwind CSS/PostCSS integration within the allocated time. The UI components (App.tsx contains basic structure) are incomplete and non-functional.
-
-Schema Migration Workflow: A formal process for production database schema changes (e.g., zero-downtime migration strategy) is not detailed but would typically involve review, backup, phased rollout, and monitoring. Prisma Migrate handles the script generation and application.
-
