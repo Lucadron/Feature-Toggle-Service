@@ -50,7 +50,7 @@ router.use(authenticate);
  *         required: false
  *         schema:
  *           type: string
- *           enum: [DEV, TEST, STAGE, PROD]
+ *           enum: [dev, test, staging, prod]
  *     responses:
  *       '200':
  *         description: Paginated feature flags
